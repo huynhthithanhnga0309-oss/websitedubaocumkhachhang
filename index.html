@@ -126,8 +126,8 @@
     <!-- TABS -->
     <div class="tabs">
      <button class="tab-btn active" data-tab="single"><strong>1) Dự đoán từng khách hàng</strong></button>
-     <button class="tab-btn" data-tab="paste"><strong>2) Dự đoán nhiều khách hàng</strong></button>
-     <button class="tab-btn" data-tab="upload"><strong>3) Tải file CSV/XLSX để dự đoán</strong></button>
+     <button class="tab-btn" data-tab="paste"><strong>2) Dán dữ liệu nhiều dòng</strong></button>
+     <button class="tab-btn" data-tab="upload"><strong>3) Tải file CSV/XLSX</strong></button>
     </div>
 
     <!-- TAB 1 -->
@@ -169,7 +169,7 @@
       <textarea id="bulkInput" placeholder="38,40000,20,720
 41,25000,15,690"></textarea>
       <div class="row" style="margin-top:12px">
-        <button id="btnBatch" class="btn">Dự đoán nhiều khách hàng <span id="spinBatch" class="spinner"></span></button>
+        <button id="btnBatch" class="btn">Dự đoán nhiều dòng <span id="spinBatch" class="spinner"></span></button>
         <button id="btnDownloadPaste" class="btn secondary" disabled>Tải kết quả (CSV)</button>
       </div>
       <div id="batchErrors" class="status warn" style="display:none"></div>
@@ -253,22 +253,19 @@
 
     // ====== BẢN ĐỒ NHÃN -> TÊN CỤM & HÀNH ĐỘNG (theo ảnh bạn gửi) ======
     const CLUSTER_MAP = {
-      "0_Young":        { name:"Trẻ – chi tiêu thấp – nợ trung bình",           hint:"Giới thiệu sản phẩm tín dụng nhỏ, khuyến mãi học tập hoặc tiêu dùng" },
-      "0_Middle-aged":  { name:"Trung niên – chi tiêu thấp – nợ trung bình",      hint:"Cung cấp các gói tín dụng cá nhân linh hoạt" },
-      "0_Senior":       { name:"Cao tuổi – chi tiêu trung bình – nợ thấp",     hint:"Giới thiệu sản phẩm tiết kiệm và bảo hiểm sức khỏe" },
-      "1_Young":        { name:"Trẻ – chi tiêu cao – nợ trung bình",             hint:"Phát hành thẻ tín dụng cao cấp, ưu đãi du lịch" },
-      "1_Middle-aged":  { name:"Trung niên – chi tiêu cao – nợ trung bình",       hint:"Phát hành thẻ tín dụng cao cấp, tiết kiệm song song" },
-      "1_Senior":       { name:"Cao tuổi – chi tiêu cao – nợ thấp",              hint:"Khuyến khích đầu tư an toàn, gói hưu trí" },
-      "2_Young":        { name:"Trẻ – chi tiêu TB – nợ cao – tín dụng tốt",       hint:"Đề xuất gói vay kinh doanh, quản lý tài chính" },
-      "2_Middle-aged":  { name:"Trung niên – chi tiêu TB – nợ cao – tín dụng tốt",  hint:"Gợi ý tái cấp vốn, tiết kiệm lãi suất" },
-      "2_Senior":       { name:"Cao tuổi – chi tiêu TB – nợ rất cao",         hint:"Tư vấn bảo hiểm & quản lý danh mục đầu tư" },
-      "3_Young":        { name:"Trẻ – chi tiêu TB – nợ TB – tín dụng rất tốt",    hint:"Đề xuất làm đại sứ thương hiệu, ưu đãi đặc biệt" },
-      "3_Middle-aged":  { name:"Trung niên – chi tiêu TB – nợ TB – tín dụng cao nhất", hint:"Triển khai dịch vụ VIP, cá nhân hóa" },
-      "3_Senior":       { name:"Cao tuổi – chi tiêu TB – nợ thấp – tín dụng rất tốt", hint:"Gợi ý đầu tư an toàn, tiết kiệm cao cấp" },
-      "4_Young":        { name:"Trẻ – chi tiêu TB – nợ cao – tín dụng thấp",      hint:"Giảm hạn mức, giám sát gắt gao" },
-      "4_Middle-aged":  { name:"Trung niên – chi tiêu TB – nợ cao – tín dụng thấp", hint:"Tăng kiểm tra tín dụng, khuyến khích trả dần" },
-      "4_Senior":       { name:"Cao tuổi – chi tiêu TB – nợ TB – tín dụng yếu",   hint:"Theo dõi sát lịch trả nợ, hỗ trợ tư vấn tài chính" }
-};
+      "0_young":        { name:"Trẻ – Chi tiêu rất thấp – Nợ cao",           hint:"Tạo gói ưu đãi “chi tiêu đầu tiên”, cashback nhỏ" },
+      "0_middle_aged":  { name:"Trung niên – Chi tiêu thấp – Nợ TB",          hint:"Duy trì ưu đãi định kỳ, tăng cường chăm sóc" },
+      "0_senior":       { name:"Lớn tuổi – Chi tiêu thấp – Nợ thấp",          hint:"Giới thiệu sản phẩm tiết kiệm, bảo hiểm" },
+      "1_young":        { name:"Trẻ – Chi tiêu cao – Nợ cao",                  hint:"Tập trung giữ chân qua chương trình tích điểm, cashback" },
+      "1_middle_aged":  { name:"Trung niên – Chi tiêu cao – Nợ cao",           hint:"Ưu tiên chương trình khách hàng thân thiết" },
+      "1_senior":       { name:"Lớn tuổi – Chi tiêu cao – Nợ cao",             hint:"Giới thiệu thẻ hạng cao, ưu đãi cao cấp" },
+      "2_young":        { name:"Trẻ – Chi tiêu TB – Nợ TB",                    hint:"Đề xuất sản phẩm đầu tư an toàn, tiết kiệm sinh lời" },
+      "2_middle_aged":  { name:"Trung niên – Chi tiêu TB – Nợ TB",             hint:"Bán chéo sản phẩm tài chính" },
+      "2_senior":       { name:"Lớn tuổi – Chi tiêu TB – Nợ thấp",             hint:"Gợi ý gói bảo hiểm, tiết kiệm lãi cao" },
+      "3_young":        { name:"Trẻ – Chi tiêu thấp – Nợ TB",                  hint:"Khuyến khích chi tiêu qua gói ưu đãi, đầu tư linh hoạt" },
+      "3_middle_aged":  { name:"Trung niên – Chi tiêu TB – Nợ TB",             hint:"Giới thiệu sản phẩm đầu tư an toàn, sinh lời ổn định" },
+      "3_senior":       { name:"Lớn tuổi – Chi tiêu thấp – Nợ thấp",           hint:"Ưu đãi nhẹ, tri ân khách hàng trung niên" }
+    };
 
     // Chuẩn hoá chuỗi để bắt key: "2_Young", "Young_2", "2-middle-aged", "Cụm 3 Senior"...
     const _norm = (s)=> (s||"").toString().toLowerCase().replace(/\s+/g,"").replace(/-/g,"_");
