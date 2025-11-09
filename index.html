@@ -1,15 +1,25 @@
 <!DOCTYPE html>
+<!--
+Bước 0 — TỔNG QUAN
+• Ứng dụng web 1 trang (SPA nhỏ) để dự đoán “cụm khách hàng”.
+• Có 3 cách nhập dữ liệu: (1) gõ từng khách hàng, (2) dán nhiều dòng, (3) tải file CSV/XLSX.
+• Gọi 1 API dự đoán duy nhất; tự động dò định dạng payload phù hợp; ánh xạ nhãn trả về sang tên cụm + gợi ý hành động.
+• Cho phép xem trước, hiển thị bảng kết quả, tiến độ, và tải CSV kết quả.
+-->
 <html lang="vi">
 <head>
+  <!-- Bước 1 — Thiết lập cơ bản cho trang -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title><strong>HỆ THỐNG DỰ ĐOÁN CỤM KHÁCH HÀNG</strong></title>
 
-  <!-- PapaParse (CSV) & SheetJS (XLSX) -->
+  <!-- Bước 2 — Thư viện đọc CSV/XLSX trên trình duyệt -->
+  <!-- PapaParse: phân tích CSV; SheetJS: đọc Excel (.xlsx/.xls) -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
+    /* Bước 3 — Phong cách giao diện (CSS) */
     :root{
       --bg:#FFFFFF; --surface:#F5F7FB; --surface-2:#EAF2FF;
       --text:#222; --muted:#6A7480; --border:#E3E8EF;
@@ -108,6 +118,7 @@
 </head>
 <body>
   <div class="container">
+    <!-- Bước 4 — Header & logo -->
     <header>
       <div class="brand">
         <div class="logo">
@@ -123,14 +134,14 @@
 
     <div class="header-banner" aria-hidden="true"></div>
 
-    <!-- TABS -->
+    <!-- Bước 5 — Tabs điều hướng 3 cách nhập liệu -->
     <div class="tabs">
      <button class="tab-btn active" data-tab="single"><strong>1) Dự đoán từng khách hàng</strong></button>
-     <button class="tab-btn" data-tab="paste"><strong>2) Dự đoán nhiều khách hàng</strong></button>
+     <button class="tab-btn" data-tab="paste"><strong>2) Dự đoán nhiều khách hàng </strong></button>
      <button class="tab-btn" data-tab="upload"><strong>3) Dự đoán bằng file CSV/XLSX</strong></button>
     </div>
 
-    <!-- TAB 1 -->
+    <!-- Bước 6 — Tab 1: Form dự đoán cho 1 khách hàng -->
     <section class="panel" id="tab-single">
       <div class="grid cols-2">
         <div>
@@ -162,7 +173,7 @@
       <div id="singleStatus" class="status" style="display:none"></div>
     </section>
 
-    <!-- TAB 2 -->
+    <!-- Bước 7 — Tab 2: Dán nhiều dòng và dự đoán hàng loạt -->
     <section class="panel soft" id="tab-paste" style="display:none">
       <div class="hint"><strong>Thứ tự cột:</strong> age, total_debt, avg_amount, credit_score</div>
       <label for="bulkInput" style="margin-top:10px">Dán dữ liệu (mỗi dòng 4 số, phẩy hoặc tab):</label>
@@ -177,7 +188,7 @@
       <div id="tableWrapPaste"></div>
     </section>
 
-    <!-- TAB 3 -->
+    <!-- Bước 8 — Tab 3: Tải và xử lý file CSV/XLSX -->
     <section class="panel accent" id="tab-upload" style="display:none">
       <div class="grid cols-2">
         <div>
@@ -222,7 +233,7 @@
   </div>
 
   <script>
-    // Logo fallback
+    // Bước 9 — Logo fallback (đổi nguồn ảnh nếu link đầu lỗi)
     (function ensureLogo(){
       const id = "1NPBpI4aCFh6TV2IG9asVzKRbDfpkRpBb";
       const primary = `https://lh3.googleusercontent.com/d/${id}`;
@@ -238,9 +249,11 @@
     })();
 
     // ================== CONFIG ==================
+    // Bước 10 — Khai báo URL API AWS dùng để dự đoán
     const API_URL = "https://jbgd438w8d.execute-api.ap-southeast-2.amazonaws.com/prod/predict";
 
     // ================== UTIL ==================
+    // Bước 11 — Các tiện ích dùng chung (DOM helper, hiển thị trạng thái, parse số, CSV,...)
     const $ = (id)=>document.getElementById(id);
     const show = (el,on=true)=>{ el.style.display = on ? "" : "none"; };
     const setStatus = (el,msg,type)=>{ el.className="status "+(type||""); el.innerHTML=msg; show(el,true); };
@@ -251,33 +264,38 @@
     const buildApiList = (age,total_debt,avg_amount,credit_score)=>[ total_debt, avg_amount, credit_score, age ];
     const csvEscape = (v)=> `"${String(v??"").replace(/"/g,'""')}"`;
 
-    // ====== BẢN ĐỒ NHÃN -> TÊN CỤM & HÀNH ĐỘNG (theo ảnh bạn gửi) ======
+    // Bước 12 — Tên cụm & gợi ý hành động
     const CLUSTER_MAP = {
-      "0_young":        { name:"Trẻ – Chi tiêu rất thấp – Nợ cao",           hint:"Tạo gói ưu đãi “chi tiêu đầu tiên”, cashback nhỏ" },
-      "0_middle_aged":  { name:"Trung niên – Chi tiêu thấp – Nợ TB",          hint:"Duy trì ưu đãi định kỳ, tăng cường chăm sóc" },
-      "0_senior":       { name:"Lớn tuổi – Chi tiêu thấp – Nợ thấp",          hint:"Giới thiệu sản phẩm tiết kiệm, bảo hiểm" },
-      "1_young":        { name:"Trẻ – Chi tiêu cao – Nợ cao",                  hint:"Tập trung giữ chân qua chương trình tích điểm, cashback" },
-      "1_middle_aged":  { name:"Trung niên – Chi tiêu cao – Nợ cao",           hint:"Ưu tiên chương trình khách hàng thân thiết" },
-      "1_senior":       { name:"Lớn tuổi – Chi tiêu cao – Nợ cao",             hint:"Giới thiệu thẻ hạng cao, ưu đãi cao cấp" },
-      "2_young":        { name:"Trẻ – Chi tiêu TB – Nợ TB",                    hint:"Đề xuất sản phẩm đầu tư an toàn, tiết kiệm sinh lời" },
-      "2_middle_aged":  { name:"Trung niên – Chi tiêu TB – Nợ TB",             hint:"Bán chéo sản phẩm tài chính" },
-      "2_senior":       { name:"Lớn tuổi – Chi tiêu TB – Nợ thấp",             hint:"Gợi ý gói bảo hiểm, tiết kiệm lãi cao" },
-      "3_young":        { name:"Trẻ – Chi tiêu thấp – Nợ TB",                  hint:"Khuyến khích chi tiêu qua gói ưu đãi, đầu tư linh hoạt" },
-      "3_middle_aged":  { name:"Trung niên – Chi tiêu TB – Nợ TB",             hint:"Giới thiệu sản phẩm đầu tư an toàn, sinh lời ổn định" },
-      "3_senior":       { name:"Lớn tuổi – Chi tiêu thấp – Nợ thấp",           hint:"Ưu đãi nhẹ, tri ân khách hàng trung niên" }
+      "0_Young":        { name:"Trẻ – chi tiêu thấp – nợ trung bình",           hint:"Giới thiệu sản phẩm tín dụng nhỏ, khuyến mãi học tập hoặc tiêu dùng" },
+      "0_Middle-aged":  { name:"Trung niên – chi tiêu thấp – nợ trung bình",      hint:"Cung cấp các gói tín dụng cá nhân linh hoạt" },
+      "0_Senior":       { name:"Cao tuổi – chi tiêu trung bình – nợ thấp",     hint:"Giới thiệu sản phẩm tiết kiệm và bảo hiểm sức khỏe" },
+      "1_Young":        { name:"Trẻ – chi tiêu cao – nợ trung bình",             hint:"Phát hành thẻ tín dụng cao cấp, ưu đãi du lịch" },
+      "1_Middle-aged":  { name:"Trung niên – chi tiêu cao – nợ trung bình",       hint:"Phát hành thẻ tín dụng cao cấp, tiết kiệm song song" },
+      "1_Senior":       { name:"Cao tuổi – chi tiêu cao – nợ thấp",              hint:"Khuyến khích đầu tư an toàn, gói hưu trí" },
+      "2_Young":        { name:"Trẻ – chi tiêu TB – nợ cao – tín dụng tốt",       hint:"Đề xuất gói vay kinh doanh, quản lý tài chính" },
+      "2_Middle-aged":  { name:"Trung niên – chi tiêu TB – nợ cao – tín dụng tốt",  hint:"Gợi ý tái cấp vốn, tiết kiệm lãi suất" },
+      "2_Senior":       { name:"Cao tuổi – chi tiêu TB – nợ rất cao",         hint:"Tư vấn bảo hiểm & quản lý danh mục đầu tư" },
+      "3_Young":        { name:"Trẻ – chi tiêu TB – nợ TB – tín dụng rất tốt",    hint:"Đề xuất làm đại sứ thương hiệu, ưu đãi đặc biệt" },
+      "3_Middle-aged":  { name:"Trung niên – chi tiêu TB – nợ TB – tín dụng cao nhất", hint:"Triển khai dịch vụ VIP, cá nhân hóa" },
+      "3_Senior":       { name:"Cao tuổi – chi tiêu TB – nợ thấp – tín dụng rất tốt", hint:"Gợi ý đầu tư an toàn, tiết kiệm cao cấp" },
+      "4_Young":        { name:"Trẻ – chi tiêu TB – nợ cao – tín dụng thấp",      hint:"Giảm hạn mức, giám sát gắt gao" },
+      "4_Middle-aged":  { name:"Trung niên – chi tiêu TB – nợ cao – tín dụng thấp", hint:"Tăng kiểm tra tín dụng, khuyến khích trả dần" },
+      "4_Senior":       { name:"Cao tuổi – chi tiêu TB – nợ TB – tín dụng yếu",   hint:"Theo dõi sát lịch trả nợ, hỗ trợ tư vấn tài chính" }
+}
+```
     };
 
-    // Chuẩn hoá chuỗi để bắt key: "2_Young", "Young_2", "2-middle-aged", "Cụm 3 Senior"...
+    // Bước 13 — Hàm chuẩn hoá & bắt key cụm từ chuỗi trả về của API
     const _norm = (s)=> (s||"").toString().toLowerCase().replace(/\s+/g,"").replace(/-/g,"_");
     function normalizeClusterKey(raw){
       if (!raw) return null;
       const s = _norm(raw);
-      // Bắt dạng có số trước: 2_young, 3_middleaged, 1_senior ...
+      // Dạng "2_young", "3_middleaged", ...
       let m = s.match(/(\d)[_\s]*?(young|middle[_]?aged|senior)/);
       if (!m){
-        // Bắt dạng chữ trước số: young_2, middleaged_3 ...
+        // Dạng "young_2" => đảo vị trí để tạo key chuẩn
         m = s.match(/(young|middle[_]?aged|senior)[_\s]*?(\d)/);
-        if (m) m = [m[0], m[2], m[1]]; // đảo lại: [all, num, group]
+        if (m) m = [m[0], m[2], m[1]]; // [all, num, group]
       }
       if (!m) return null;
       const num = m[1];
@@ -285,7 +303,8 @@
       return `${num}_${grp}`;
     }
 
-    // ==== Trích xuất kết quả từ API ====
+    // Bước 14 — Tách thông tin kết quả từ mọi format JSON có thể
+// Tóm tắt: Đỡ mọi kiểu phản hồi (có/không có body) → lấy label/text + code để dùng tiếp.
     function extractOutcome(d){
       try{
         let x=d;
@@ -301,13 +320,13 @@
       return { ok:false };
     }
 
+    // Bước 15 — Suy ra tên cụm & gợi ý từ bảng ánh xạ; nếu không khớp thì fallback chung
+// Tóm tắt: Có key hợp lệ → lấy tên cụm + hint; không có → mô tả chung để vẫn hiển thị.
     function deriveByMap(labelOrText){
       const key = normalizeClusterKey(labelOrText);
       if (key && CLUSTER_MAP[key]) return { key, ...CLUSTER_MAP[key] };
       return null;
     }
-
-    // Fallback khi không match bảng: vẫn cho mô tả/hint chung
     function fallbackDescribe({label,text,code}){
       const value = label ?? text ?? "";
       return {
@@ -317,35 +336,39 @@
       };
     }
 
-    let detectedPayloadIndex = 0;
+    // Bước 16 — Gọi API thông minh: thử lần lượt 3 kiểu payload => chọn kiểu phù hợp
+// Tóm tắt: Chuẩn bị 3 payload → fetch API → extractOutcome → map (CLUSTER_MAP) → trả kết quả gọn.
+    let detectedPayloadIndex = 0; // Nhớ kiểu payload đã hoạt động để dùng cho lần sau
     async function callPredictionAPISmart(obj,list,debugHook){
+      // 16.1 Chuẩn bị 3 biến thể payload: [data:[]], [data:{}], {...}
       const payloads = [
         {desc:'{"data":[...]}', body:{ data: list }},
         {desc:'{"data":{...}}', body:{ data: obj }},
         {desc:'{...}',          body: obj}
       ];
+      // 16.2 Quyết định thứ tự thử; ưu tiên kiểu đã thành công gần nhất
       const order = detectedPayloadIndex!=null ? [detectedPayloadIndex, ...[0,1,2].filter(i=>i!==detectedPayloadIndex)] : [0,1,2];
 
       for(const i of order){
         const p = payloads[i];
         try{
+          // 16.3 Gọi API
           const res = await fetch(API_URL, {
             method:"POST",
             headers:{ "Content-Type":"application/json", "Accept":"application/json" },
             body: JSON.stringify(p.body)
           });
+          // 16.4 Đọc & parse an toàn, rồi trích kết quả
           const ct = res.headers.get("content-type") || "";
           const rawText = await res.text();
           const parsed = ct.includes("application/json") ? safeParseJSON(rawText) : safeParseJSON(rawText);
           const out = extractOutcome(parsed);
           debugHook?.({tried:p.desc,status:res.status,ok:res.ok,contentType:ct,raw:truncate(rawText)});
+          // 16.5 Nếu ok, ánh xạ tên cụm + gợi ý và trả về
           if (res.ok && out.ok){
             detectedPayloadIndex = i;
-
-            // Ưu tiên lấy từ label; nếu rỗng thì lấy từ message/text
             const mapHit = deriveByMap(out.label || out.text);
             const mapped = mapHit ?? fallbackDescribe(out);
-
             return {
               ok:true,
               msg: out.text ?? (out.label ?? "Đã dự đoán"),
@@ -362,10 +385,11 @@
           if (e.includes("Failed to fetch")) return { ok:false, msg:"Không gọi được API (khả năng CORS)." };
         }
       }
+      // 16.6 Không định dạng nào nhận diện được
       return { ok:false, msg:"API không trả kết quả nhận diện được." };
     }
 
-    // Tabs
+    // Bước 17 — Xử lý chuyển tab (ẩn/hiện panel)
     document.querySelectorAll(".tab-btn").forEach(b=>{
       b.addEventListener("click",()=>{
         document.querySelectorAll(".tab-btn").forEach(x=>x.classList.remove("active"));
@@ -376,8 +400,10 @@
       });
     });
 
-    // SINGLE
+    // Bước 18 — Luồng “Dự đoán từng khách hàng”
+// Tóm tắt: Nhập 4 số → kiểm tra → gọi API → hiển thị tên cụm + gợi ý ngay dưới nút.
     $("btnSingle").addEventListener("click", async ()=>{
+      // 18.1 Lấy & kiểm tra 4 giá trị số
       const age          = toNumber($("age").value);
       const total_debt   = toNumber($("total_debt").value);
       const avg_amount   = toNumber($("avg_amount").value);
@@ -385,11 +411,14 @@
       if([age,total_debt,avg_amount,credit_score].some(v=>Number.isNaN(v))){
         setStatus($("singleStatus"), "Sai định dạng. Cần 4 số.", "err"); return;
       }
+      // 18.2 Hiển thị trạng thái & chuẩn bị payload 2 kiểu
       $("spinSingle").classList.add("show");
       setStatus($("singleStatus"), "Đang gọi API...", "warn");
       const payloadObj = { age, total_debt, avg_amount, credit_score };
       const payloadList = buildApiList(age, total_debt, avg_amount, credit_score);
+      // 18.3 Gọi API thông minh
       const r = await callPredictionAPISmart(payloadObj, payloadList);
+      // 18.4 Hiển thị kết quả
       $("spinSingle").classList.remove("show");
       setStatus(
         $("singleStatus"),
@@ -400,9 +429,11 @@
       );
     });
 
-    // PASTE
-    let pasteCSV = "";
+    // Bước 19 — Luồng “Dán dữ liệu nhiều dòng”
+// Tóm tắt: Dán nhiều dòng → parse/validate → gọi API từng dòng → render bảng + cho tải CSV.
+    let pasteCSV = ""; // buffer tạo file CSV kết quả để tải xuống
     $("btnBatch").addEventListener("click", async ()=>{
+      // 19.1 Tách các dòng, kiểm tra định dạng
       const raw = $("bulkInput").value.trim();
       $("tableWrapPaste").innerHTML=""; show($("batchErrors"),false); show($("batchStatus"),false);
       $("btnDownloadPaste").disabled=true; pasteCSV="";
@@ -421,6 +452,7 @@
       if(errors.length) setStatus($("batchErrors"), `<b>Lỗi định dạng:</b><br>${errors.map(e=>"- "+e).join("<br>")}`, "warn");
       if(!parsed.length){ setStatus($("batchStatus"), "Không có dòng hợp lệ.", "warn"); return; }
 
+      // 19.2 Gọi API theo từng dòng, gom kết quả
       $("spinBatch").classList.add("show");
       setStatus($("batchStatus"), `Đang dự đoán cho ${parsed.length} khách hàng...`, "warn");
       const results=[];
@@ -434,6 +466,7 @@
       $("spinBatch").classList.remove("show");
       setStatus($("batchStatus"), `✅ Xong ${parsed.length} dòng.`, "ok");
 
+      // 19.3 Render bảng kết quả & chuẩn bị CSV để tải
       const tbl=document.createElement("table");
       tbl.innerHTML=`<thead><tr>
         <th>#</th><th>age</th><th>total_debt</th><th>avg_amount</th><th>credit_score</th>
@@ -455,6 +488,7 @@
       $("btnDownloadPaste").disabled=false;
     });
 
+    // 19.4 Tải xuống CSV kết quả cho luồng "dán"
     $("btnDownloadPaste").addEventListener("click", ()=>{
       if(!pasteCSV) return;
       const blob = new Blob([withBOM(pasteCSV)], {type:"text/csv;charset=utf-8;"});
@@ -463,16 +497,20 @@
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     });
 
-    // UPLOAD
+    // Bước 20 — Luồng “Tải file CSV/XLSX”
+// Tóm tắt: Kéo‑thả/chọn file → tự nhận cột (cho chỉnh) → xem trước 10 dòng → sẵn sàng dự đoán hàng loạt.
     const drop = $("drop");
+    // 20.1 Kéo-thả: hiệu ứng & nhận file
     ;["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,(e)=>{e.preventDefault();e.stopPropagation();drop.classList.add("drag");}));
     ;["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,(e)=>{e.preventDefault();e.stopPropagation();drop.classList.remove("drag");}));
     drop.addEventListener("drop",(e)=>{ const f=e.dataTransfer.files?.[0]; if(f) handleFile(f); });
+    // 20.2 Chọn file qua input
     $("fileInput").addEventListener("change", (e)=>{ const f=e.target.files?.[0]; if(f) handleFile(f); });
 
     let fileRows = [], fileCols = [];
     let mapped = { age:0, debt:1, avg:2, score:3 };
 
+    // 20.3 Logic xác định & ánh xạ cột
     function normalizeName(s){ return (s||"").toString().toLowerCase().replace(/[^a-z0-9]+/g,""); }
     function autoMapColumns(names){
       const keyMap = {
@@ -501,6 +539,7 @@
       show($("previewWrap"), true);
     }
 
+    // 20.4 Đọc file (CSV hoặc XLSX) và chuẩn hoá dữ liệu
     async function handleFile(file){
       fileRows = []; fileCols = [];
       $("tableWrapFile").innerHTML = "";
@@ -512,10 +551,12 @@
       const ext = file.name.toLowerCase().split('.').pop();
       try{
         if (ext === "csv"){ await parseCSV(file); } else { await parseXLSX(file); }
+        // 20.4.1 Nhận diện header: nếu dòng đầu chứa chữ -> coi là tên cột
         let headerRow = fileRows[0] || [];
         const looksLikeHeader = headerRow.some(v => isNaN(Number(v)));
         if (looksLikeHeader){ fileCols = headerRow.map((c,i)=>(c==null||c==="")?`Cột ${i+1}`:String(c)); fileRows = fileRows.slice(1); }
         else { fileCols = headerRow.map((_,i)=>`Cột ${i+1}`); }
+        // 20.4.2 Tự động ánh xạ + Cho phép sửa bằng select
         mapped = autoMapColumns(fileCols);
         populateMappingSelects(fileCols);
         renderPreview(fileRows, fileCols);
@@ -549,7 +590,8 @@
       });
     }
 
-    // Predict file
+    // Bước 21 — Dự đoán cho toàn bộ file + tiến độ + kết quả + xuất CSV
+// Tóm tắt: Làm sạch dữ liệu → gọi API song song (tối đa 5 worker) → cập nhật % → bảng → CSV tải xuống.
     let fileCSV = "";
     $("btnPredictFile").addEventListener("click", async ()=>{
       if(!fileRows.length) return;
@@ -558,6 +600,7 @@
       setStatus($("fileStatus"), "Đang dự đoán…", "warn");
       $("btnPredictFile").disabled = true; $("btnDownloadFile").disabled = true;
 
+      // 21.1 Làm sạch & kiểm tra dữ liệu theo ánh xạ cột
       const clean = [], errors = [];
       for(let i=0;i<fileRows.length;i++){
         const row = fileRows[i];
@@ -571,6 +614,7 @@
         $("btnPredictFile").disabled = false; return;
       }
 
+      // 21.2 Chạy song song tối đa 5 worker để gọi API nhanh hơn + cập nhật % tiến độ
       const results = new Array(clean.length);
       const limit = 5; let done = 0;
       async function worker(start){
@@ -587,6 +631,7 @@
       const workers = []; for(let w=0;w<Math.min(limit,clean.length);w++) workers.push(worker(w));
       await Promise.all(workers);
 
+      // 21.3 Hiển thị bảng kết quả (giới hạn 1000 dòng để trình duyệt mượt)
       setStatus($("fileStatus"), `✅ Hoàn tất dự đoán ${clean.length} dòng.`, "ok");
       $("btnPredictFile").disabled = false; $("btnDownloadFile").disabled = false;
 
@@ -604,11 +649,13 @@
       });
       $("tableWrapFile").innerHTML=""; $("tableWrapFile").appendChild(tbl);
 
+      // 21.4 Tạo CSV kết quả để tải xuống
       const header=["age","total_debt","avg_amount","credit_score","prediction","cluster_name","action_hint"];
       const rows = clean.map((r,i)=>[r.arr[0],r.arr[1],r.arr[2],r.arr[3],results[i].msg,results[i].name,results[i].hint]);
       fileCSV = [header.join(",")].concat(rows.map(r=>r.map(csvEscape).join(","))).join("\n");
     });
 
+    // 21.5 Nút tải CSV cho luồng "tải file"
     $("btnDownloadFile").addEventListener("click", ()=>{
       if(!fileCSV) return;
       const blob = new Blob([withBOM(fileCSV)], {type:"text/csv;charset=utf-8;"});
@@ -616,6 +663,7 @@
       const a = document.createElement("a"); a.href=url; a.download="ket_qua_du_doan.csv";
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     });
+
   </script>
 </body>
 </html>
